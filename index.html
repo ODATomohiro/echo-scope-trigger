@@ -1,84 +1,568 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EchoScope — 反射測定 v1.2（閾値ガイド付き）</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EchoScope — 反射測定（単一HTML版 v1.4S / GitHub Pages対応）</title>
+<style>
+*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;margin:0;color:#1b1f23;background:#f6f8fa}
+header{padding:16px 20px;background:#fff;border-bottom:1px solid #e5e7eb}
+h1{margin:.1em 0;font-size:22px}
+.panel{background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0}
+label{display:flex;flex-direction:column;font-size:12px;color:#555;gap:4px}
+label.inline{flex-direction:row;align-items:center;margin-left:6px}
+input[type=number], select{padding:6px 8px;border:1px solid #c9d2e0;border-radius:8px;background:#f7faff;min-width:90px}
+button{padding:8px 12px;border-radius:10px;border:1px solid #c7d0e0;background:#e9effa;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+#status{margin-left:8px;color:#555}
+.warn{background:#fff3cd;border:1px solid #ffe69c;color:#775f00;padding:8px 12px;border-radius:10px}
+.error{background:#fde2e1;border:1px solid #f5b5b0;color:#942a23;padding:8px 12px;border-radius:10px}
+.canvas-wrap{padding:12px 16px}
+#wave{width:100%;height:300px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.results{background:#fff;border-top:1px solid #e5e7eb;padding:12px 16px;display:grid;gap:6px}
+.small{font-size:12px;color:#6b7280}
+</style>
 </head>
 <body>
-  <header>
-    <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）v1.2</h1>
-    <p><b>手動指定はそのまま</b>、補助として<b>包絡＋相対閾値</b>と<b>候補ピーク</b>のガイドを追加。</p>
-  </header>
+<header>
+  <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）単一HTML v1.4S</h1>
+  <div id="originWarn" class="warn" style="display:none">このページは <b>安全なオリジン(HTTPS)</b> で開かれていません。Chromeでも <b>file:// や http(s)でないURL</b> では<b>マイクが使えません</b>。<br>対策：<b>GitHub Pages など HTTPS</b> で開くか、<b>http://localhost</b> でローカルサーバー経由にしてください。</div>
+</header>
 
-  <section class="panel">
-    <div class="row">
-      <label>録音時間 (ms)
-        <input id="recMs" type="number" min="200" step="50" value="1200">
-      </label>
-      <label>プレロール (ms)
-        <input id="preMs" type="number" min="50" step="10" value="150">
-      </label>
-      <label>パルス種別
-        <select id="pulseType">
-          <option value="noise">ノイズ</option>
-          <option value="sine" selected>サイン(1.5kHz)</option>
-        </select>
-      </label>
-      <label>パルス長 (ms)
-        <input id="pulseMs" type="number" min="2" step="1" value="60">
-      </label>
-      <label>パルス音量 (0〜1)
-        <input id="pulseVol" type="number" min="0" max="1" step="0.05" value="0.8">
-      </label>
-    </div>
+<section class="panel">
+  <div class="row">
+    <label>録音時間 (ms)
+      <input id="recMs" type="number" min="200" step="50" value="1200">
+    </label>
+    <label>プレロール (ms)
+      <input id="preMs" type="number" min="50" step="10" value="150">
+    </label>
+    <label>パルス種別
+      <select id="pulseType">
+        <option value="noise">ノイズ</option>
+        <option value="sine" selected>サイン(1.5kHz)</option>
+      </select>
+    </label>
+    <label>パルス長 (ms)
+      <input id="pulseMs" type="number" min="2" step="1" value="80">
+    </label>
+    <label>パルス音量 (0〜1)
+      <input id="pulseVol" type="number" min="0" max="1" step="0.05" value="1.0">
+    </label>
+  </div>
 
-    <div class="row">
-      <label>包絡窓 (ms)
-        <input id="envMs" type="number" min="0.3" step="0.1" value="1.2">
-      </label>
-      <label>相対閾値 (0〜1)
-        <input id="thresh" type="number" min="0.02" max="1" step="0.01" value="0.06">
-      </label>
-      <label>最小ピーク間隔 (ms)
-        <input id="minSep" type="number" min="0.5" step="0.1" value="2.5">
-      </label>
-      <label class="inline"><input id="showCands" type="checkbox" checked> 候補表示</label>
-      <button id="applyTop2">候補→t₁/t₂</button>
-    </div>
+  <div class="row">
+    <label>包絡窓 (ms)
+      <input id="envMs" type="number" min="0.3" step="0.1" value="1.2">
+    </label>
+    <label>相対閾値 (0〜1)
+      <input id="thresh" type="number" min="0.02" max="1" step="0.01" value="0.06">
+    </label>
+    <label>最小ピーク間隔 (ms)
+      <input id="minSep" type="number" min="0.5" step="0.1" value="2.5">
+    </label>
+    <label class="inline"><input id="showCands" type="checkbox" checked> 候補表示</label>
+    <button id="applyTop2">候補→t₁/t₂</button>
+  </div>
 
-    <div class="row">
-      <button id="measureBtn">発音して測定</button>
-      <button id="startBtn">録音のみ</button>
-      <button id="stopBtn" disabled>停止</button>
-      <button id="pulseTest">パルス再生テスト</button>
-      <button id="exportBtn" disabled>CSV書き出し</button>
-      <span id="status">準備OK</span>
-    </div>
-  </section>
+  <div class="row">
+    <button id="measureBtn">発音して測定</button>
+    <button id="startBtn">録音のみ</button>
+    <button id="stopBtn" disabled>停止</button>
+    <button id="pulseTest">パルス再生テスト</button>
+    <button id="demoSignal">デモ信号生成</button>
+    <button id="exportBtn" disabled>CSV書き出し</button>
+    <span id="status">準備OK</span>
+  </div>
+</section>
 
-  <section class="canvas-wrap">
-    <canvas id="wave" width="1200" height="300" title="t₁/t₂ボタンを押してから、波形をクリックしてピーク位置を決めます"></canvas>
-  </section>
+<section class="canvas-wrap">
+  <canvas id="wave" title="t₁/t₂ボタンを押してから、波形をクリックしてピーク位置を決めます"></canvas>
+</section>
 
-  <section class="row">
-    <button id="setT1">t₁手動</button>
-    <button id="setT2">t₂手動</button>
-    <button id="clearMarks">マーク消去</button>
-  </section>
+<section class="row" style="padding:0 16px 12px">
+  <button id="setT1">t₁手動</button>
+  <button id="setT2">t₂手動</button>
+  <button id="clearMarks">マーク消去</button>
+</section>
 
-  <section class="results">
-    <div>サンプルレート: <span id="sr">—</span> Hz</div>
-    <div>t₁: <span id="t1">—</span> s ／ A₁: <span id="a1">—</span></div>
-    <div>t₂: <span id="t2">—</span> s ／ A₂: <span id="a2">—</span></div>
-    <div>Δt = <span id="dt">—</span> s</div>
-  </section>
+<section class="results">
+  <div>サンプルレート: <span id="sr">—</span> Hz</div>
+  <div>t₁: <span id="t1">—</span> s ／ A₁: <span id="a1">—</span></div>
+  <div>t₂: <span id="t2">—</span> s ／ A₂: <span id="a2">—</span></div>
+  <div>Δt = <span id="dt">—</span> s</div>
+</section>
 
-  <footer>
-    <small>ガイドは表示のみで、<b>測定値は常に手動で決定</b>できます。iPhoneでは録音中の再生音が小さく聞こえる場合があります。</small>
-  </footer>
+<footer style="padding:12px 16px">
+  <div class="small">マイクが取得できないときは、<b>https</b> または <b>http://localhost</b> で開いてください。Chromeでも file:// は不可です。<br>
+  例）ターミナルで <code>python3 -m http.server 8000</code> → <code>http://localhost:8000/index.html</code></div>
+</footer>
 
-  <script src="script.js"></script>
+<script>
+// ---- Inline worklet as Blob (optional) ----
+const RECORDER_WORKLET_CODE = `
+class RecorderProcessor extends AudioWorkletProcessor {
+  process(inputs, outputs){
+    const input = inputs[0];
+    const out = outputs[0];
+    if(input && input[0]){
+      const ch0 = input[0];
+      const copy = new Float32Array(ch0.length);
+      copy.set(ch0);
+      this.port.postMessage({type:'samples', payload: copy}, [copy.buffer]);
+    }
+    if(out && out[0]){ out[0].fill(0); }
+    return true;
+  }
+}
+registerProcessor('recorder', RecorderProcessor);
+`;
+// -------------------------------------------
+
+let audioCtx;
+let recNode;        // AudioWorkletNode or ScriptProcessorNode
+let stream;
+let buffer = [];
+let sampleRate = 48000;
+
+const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+const $ = (s)=>document.querySelector(s);
+const wave = $("#wave");
+const g = wave.getContext("2d");
+
+const recMsEl = $("#recMs");
+const preMsEl = $("#preMs");
+const pulseTypeEl = $("#pulseType");
+const pulseMsEl = $("#pulseMs");
+const pulseVolEl = $("#pulseVol");
+
+const envMsEl = $("#envMs");
+const threshEl = $("#thresh");
+const minSepEl = $("#minSep");
+const showCandsEl = $("#showCands");
+const applyTop2Btn = $("#applyTop2");
+
+const measureBtn = $("#measureBtn");
+const startBtn = $("#startBtn");
+const stopBtn = $("#stopBtn");
+const pulseTestBtn = $("#pulseTest");
+const demoSignalBtn = $("#demoSignal");
+const exportBtn = $("#exportBtn");
+const setT1Btn = $("#setT1");
+const setT2Btn = $("#setT2");
+const clearMarksBtn = $("#clearMarks");
+const statusEl = $("#status");
+const originWarn = $("#originWarn");
+
+const srEl = $("#sr");
+const t1El = $("#t1");
+const a1El = $("#a1");
+const t2El = $("#t2");
+const a2El = $("#a2");
+const dtEl = $("#dt");
+
+let lastData = null;
+let marks = {t1:null, t2:null};
+let candidates = [];
+let pickMode = null;
+
+if(!isSecure){
+  originWarn.style.display = 'block';
+}
+
+function setStatus(s){ statusEl.textContent = s; }
+
+// --- Canvas responsive (CSS幅と内部ピクセル幅を一致) ---
+function syncCanvasSize(){
+  const rect = wave.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  wave.width = Math.max(1, Math.round(rect.width * dpr));
+  wave.height = Math.max(1, Math.round(300 * dpr));
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); // 以後はCSS座標で描ける
+}
+new ResizeObserver(syncCanvasSize).observe(wave);
+syncCanvasSize();
+
+function resetUI(){
+  [t1El,a1El,t2El,a2El,dtEl].forEach(el=>el.textContent="—");
+  exportBtn.disabled = true;
+  draw([], []);
+  lastData = null; marks = {t1:null, t2:null}; candidates = [];
+}
+resetUI();
+
+async function loadWorkletFromBlob(ctx){
+  const blob = new Blob([RECORDER_WORKLET_CODE], {type:'application/javascript'});
+  const url = URL.createObjectURL(blob);
+  try{
+    await ctx.audioWorklet.addModule(url);
+    return true;
+  }catch(e){
+    console.warn("Worklet load failed, fallback:", e);
+    return false;
+  }finally{
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function initAudio(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  sampleRate = audioCtx.sampleRate;
+  srEl.textContent = sampleRate.toFixed(0);
+}
+
+async function attachMic(){
+  if(!isSecure){
+    throw new Error("不正なオリジン（HTTPSまたはlocalhostのみでマイク可）");
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+  }catch(e){
+    throw new Error("マイク許可が得られませんでした: " + (e && e.message || e));
+  }
+  const src = audioCtx.createMediaStreamSource(stream);
+
+  // Try worklet first, then fallback to ScriptProcessor
+  let workletOK = false;
+  try{ workletOK = await loadWorkletFromBlob(audioCtx); }catch{}
+  if(workletOK){
+    recNode = new AudioWorkletNode(audioCtx, 'recorder');
+    src.connect(recNode);
+    recNode.connect(audioCtx.destination);
+    recNode.port.onmessage = (e)=>{
+      if(e.data.type === 'samples'){
+        const arr = new Float32Array(e.data.payload);
+        buffer.push(arr);
+      }
+    };
+  }else{
+    const proc = audioCtx.createScriptProcessor(2048, 1, 1);
+    proc.onaudioprocess = (ev)=>{
+      const ch = ev.inputBuffer.getChannelData(0);
+      const copy = new Float32Array(ch.length);
+      copy.set(ch);
+      buffer.push(copy);
+      ev.outputBuffer.getChannelData(0).fill(0);
+    };
+    src.connect(proc); proc.connect(audioCtx.destination);
+    recNode = proc;
+  }
+  buffer = [];
+}
+
+function teardown(){
+  try{ recNode && recNode.disconnect && recNode.disconnect(); }catch{}
+  try{ audioCtx && audioCtx.close && audioCtx.close(); }catch{}
+  try{ stream && stream.getTracks && stream.getTracks().forEach(t=>t.stop()); }catch{}
+  recNode = null; audioCtx = null; stream = null;
+}
+
+function stopRec(){
+  stopBtn.disabled = true;
+  setStatus("停止処理...");
+  teardown();
+
+  const totalLen = buffer.reduce((acc,a)=>acc + a.length, 0);
+  const data = new Float32Array(totalLen);
+  let o=0; for(const a of buffer){ data.set(a, o); o+=a.length; }
+
+  lastData = data;
+  updateCandidates();
+  redrawAll();
+  exportBtn.disabled = false;
+  exportBtn.onclick = () => exportCSV();
+  setStatus("完了：波形から t₁/t₂ をクリックで指定してください（候補は参考表示）");
+  startBtn.disabled = false;
+  measureBtn.disabled = false;
+}
+
+async function startRecOnly(){
+  try{
+    startBtn.disabled = true; stopBtn.disabled = false;
+    setStatus("初期化...");
+    await initAudio();
+    await audioCtx.resume();
+    await attachMic();
+    setStatus("録音中...");
+    const ms = Math.max(200, parseInt(recMsEl.value||"1200",10));
+    setTimeout(stopRec, ms);
+  }catch(err){
+    console.error(err);
+    setStatus("録音エラー: " + err.message);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+}
+
+async function measureWithPulse(){
+  try{
+    measureBtn.disabled = true; stopBtn.disabled = false;
+    setStatus("初期化...");
+    await initAudio();
+    await audioCtx.resume();
+    await attachMic();
+    const recMs = Math.max(200, parseInt(recMsEl.value||"1200",10));
+    const preMs = Math.max(50, parseInt(preMsEl.value||"150",10));
+    const pulseMs = Math.max(2, parseInt(pulseMsEl.value||"80",10));
+    const vol = Math.max(0, Math.min(1, parseFloat(pulseVolEl.value||"1.0")));
+    const type = pulseTypeEl.value;
+
+    const startTime = audioCtx.currentTime + Math.max(0.05, preMs/1000);
+    playPulseAt(startTime, pulseMs/1000, vol, type);
+
+    setStatus("録音中...（パルス→手動ピーク）");
+    setTimeout(stopRec, recMs);
+  }catch(err){
+    console.error(err);
+    setStatus("エラー: " + err.message);
+    measureBtn.disabled = false;
+  }
+}
+
+function playPulseAt(startTime, durSec, vol, type){
+  const g = audioCtx.createGain();
+  g.gain.value = 0;
+  let src;
+  if(type === "sine"){
+    src = audioCtx.createOscillator();
+    src.type = "sine";
+    src.frequency.value = 1500;
+  }else{
+    const len = Math.max(1, Math.floor(sampleRate * durSec));
+    const noise = audioCtx.createBuffer(1, len, sampleRate);
+    const ch = noise.getChannelData(0);
+    for(let i=0;i<ch.length;i++) ch[i] = (Math.random()*2-1);
+    const bs = audioCtx.createBufferSource();
+    bs.buffer = noise;
+    src = bs;
+  }
+
+  const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 600;
+  const lp = audioCtx.createBiquadFilter(); lp.type='lowpass';  lp.frequency.value = 7000;
+
+  src.connect(hp).connect(lp).connect(g).connect(audioCtx.destination);
+
+  const a = g.gain;
+  a.setValueAtTime(0, startTime);
+  a.linearRampToValueAtTime(vol, startTime + 0.003);
+  a.exponentialRampToValueAtTime(0.001, startTime + durSec);
+  a.setValueAtTime(0, startTime + durSec + 0.02);
+
+  if(src.start) src.start(startTime);
+  if(src.stop)  src.stop(startTime + durSec + 0.03);
+}
+
+function movingAverageAbs(data, win){
+  const out = new Float32Array(data.length);
+  let sum = 0;
+  for(let i=0;i<data.length;i++){
+    const v = Math.abs(data[i]);
+    sum += v;
+    if(i>=win) sum -= Math.abs(data[i-win]);
+    out[i] = sum / Math.min(i+1, win);
+  }
+  return out;
+}
+
+function findCandidates(data){
+  if(!data || data.length===0) return [];
+  const sr = sampleRate;
+  const envWin = Math.max(1, Math.floor(sr * (parseFloat(envMsEl.value||"1.2")/1000)));
+  const env = movingAverageAbs(data, envWin);
+  let maxv = 0; for(let i=0;i<env.length;i++) if(env[i]>maxv) maxv=env[i];
+  const Trel = Math.max(0.0, Math.min(1.0, parseFloat(threshEl.value||"0.06")));
+  const T = (maxv>0) ? (Trel * maxv) : Trel;
+
+  const minSep = Math.max(1, Math.floor(sr * (parseFloat(minSepEl.value||"2.5")/1000)));
+  const cands = [];
+  let i = 1;
+  while(i < env.length-1){
+    if(env[i] >= T && env[i] >= env[i-1] && env[i] >= env[i+1]){
+      cands.push(i);
+      i += minSep;
+    }else{
+      i++;
+    }
+  }
+
+  const ref = [];
+  const refineWin = Math.max(1, Math.floor(sr * 0.001));
+  for(const p of cands){
+    let bestIdx = p, bestVal = 0;
+    const s = Math.max(0, p - refineWin), e = Math.min(data.length, p + refineWin + 1);
+    for(let k=s;k<e;k++){
+      const v = Math.abs(data[k]);
+      if(v > bestVal){ bestVal = v; bestIdx = k; }
+    }
+    ref.push(bestIdx);
+  }
+  return ref.slice(0, 8);
+}
+
+function updateCandidates(){ candidates = findCandidates(lastData); }
+function redrawAll(){
+  const marksList = [
+    ...(marks.t1!=null?[{index:marks.t1,color:"#1f77b4"}]:[]),
+    ...(marks.t2!=null?[{index:marks.t2,color:"#d62728"}]:[]),
+    ...(showCandsEl.checked ? candidates.map(i=>({index:i,color:"#888"})) : [])
+  ];
+  draw(lastData, marksList);
+  updateReadoutNumbers();
+}
+
+function draw(data, marksList=[]){
+  const rect = wave.getBoundingClientRect();
+  const Wcss = rect.width, Hcss = rect.height;
+  const ctx = g;
+  ctx.clearRect(0,0,Wcss,Hcss);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,Wcss,Hcss);
+  ctx.strokeStyle = "#e5e7eb"; ctx.beginPath(); ctx.moveTo(0,Hcss/2); ctx.lineTo(Wcss,Hcss/2); ctx.stroke();
+
+  if(!data || data.length===0) return;
+
+  const step = Math.ceil(data.length / Math.max(1, Math.floor(Wcss)));
+  ctx.strokeStyle = "#4f6aa0"; ctx.beginPath();
+  for(let x=0; x<Math.floor(Wcss); x++){
+    const start = x*step;
+    const end = Math.min((x+1)*step, data.length);
+    let min = 1, max = -1;
+    for(let i=start;i<end;i++){
+      const v = data[i];
+      if(v<min) min=v; if(v>max) max=v;
+    }
+    const y1 = Hcss/2 - min * (Hcss*0.45);
+    const y2 = Hcss/2 - max * (Hcss*0.45);
+    ctx.moveTo(x, y1);
+    ctx.lineTo(x, y2);
+  }
+  ctx.stroke();
+
+  marksList.forEach(m => {
+    if(!lastData) return;
+    const x = Math.floor((m.index / lastData.length) * Wcss);
+    ctx.fillStyle = m.color || "#d24";
+    ctx.fillRect(x, 0, 2, Hcss);
+  });
+}
+
+function updateReadoutNumbers(){
+  const sr = sampleRate;
+  let t1=NaN,a1=NaN,t2=NaN,a2=NaN,dt=NaN;
+  if(lastData && marks.t1!=null){ t1 = marks.t1/sr; a1 = Math.abs(lastData[marks.t1]); }
+  if(lastData && marks.t2!=null){ t2 = marks.t2/sr; a2 = Math.abs(lastData[marks.t2]); }
+  if(isFinite(t1) && isFinite(t2)) dt = t2 - t1;
+
+  t1El.textContent = isFinite(t1)?t1.toFixed(6):"—";
+  a1El.textContent = isFinite(a1)?a1.toFixed(4):"—";
+  t2El.textContent = isFinite(t2)?t2.toFixed(6):"—";
+  a2El.textContent = isFinite(a2)?a2.toFixed(4):"—";
+  dtEl.textContent = isFinite(dt)?dt.toFixed(6):"—";
+}
+
+function exportCSV(){
+  const sr = sampleRate;
+  let t1="",a1="",t2="",a2="",dt="";
+  if(marks.t1!=null){ t1 = (marks.t1/sr).toFixed(6); a1 = Math.abs(lastData[marks.t1]).toFixed(6); }
+  if(marks.t2!=null){ t2 = (marks.t2/sr).toFixed(6); a2 = Math.abs(lastData[marks.t2]).toFixed(6); }
+  if(marks.t1!=null && marks.t2!=null){ dt = ((marks.t2-marks.t1)/sr).toFixed(6); }
+  const header = ["sample_rate_Hz","t1_s","A1","t2_s","A2","delta_t_s"];
+  let csv = header.join(",") + "¥n";
+  csv += [sr, t1, a1, t2, a2, dt].join(",") + "¥n";
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "reflection_result_v14S.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Demo signal so you can click even without mic
+function makeDemoSignal(){
+  const sr = 48000;
+  const dur = Math.max(0.5, parseInt(recMsEl.value||"1200",10)/1000);
+  const N = Math.floor(sr*dur);
+  const arr = new Float32Array(N);
+  const t1s = Math.min(0.08, dur*0.2); // 80ms
+  const dt = 0.0025; // 2.5ms echo
+  const t2s = t1s + dt;
+  const i1 = Math.floor(t1s*sr);
+  const i2 = Math.floor(t2s*sr);
+  // short pulses
+  for(let k=-30; k<=30; k++){
+    if(i1+k>=0 && i1+k<N) arr[i1+k] += Math.exp(-0.5*(k/10)**2);
+    if(i2+k>=0 && i2+k<N) arr[i2+k] += 0.7*Math.exp(-0.5*(k/10)**2);
+  }
+  // noise
+  for(let i=0;i<N;i++){ arr[i] += (Math.random()-0.5)*0.02; }
+  return arr;
+}
+
+function useDemo(){
+  lastData = makeDemoSignal();
+  candidates = findCandidates(lastData);
+  marks = {t1:candidates[0]??null, t2:candidates[1]??null};
+  redrawAll();
+  setStatus("デモ信号を表示しました。t₁/t₂をクリックで調整できます。");
+  exportBtn.disabled = false;
+  exportBtn.onclick = () => exportCSV();
+}
+
+// UI events
+setT1Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t1'?null:'t1'); setStatus(pickMode==='t1'?'t₁をクリックで指定':''); });
+setT2Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t2'?null:'t2'); setStatus(pickMode==='t2'?'t₂をクリックで指定':''); });
+clearMarksBtn.addEventListener("click", ()=>{ marks = {t1:null, t2:null}; redrawAll(); });
+[envMsEl, threshEl, minSepEl, showCandsEl].forEach(el=>{
+  el.addEventListener("input", ()=>{ updateCandidates(); redrawAll(); });
+});
+applyTop2Btn.addEventListener("click", ()=>{
+  if(candidates.length >= 2){ marks.t1 = candidates[0]; marks.t2 = candidates[1]; redrawAll(); }
+});
+
+wave.addEventListener("click", (ev)=>{
+  if(!pickMode || !lastData) return;
+  const rect = wave.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  const Wcss = rect.width; // 表示幅で正規化（ズレ対策）
+  const idx = Math.round((x / Wcss) * lastData.length);
+  // refine to local |.| max ±1ms
+  const sr = sampleRate;
+  const win = Math.max(1, Math.floor(sr*0.001));
+  let best = idx, bestVal = 0;
+  for(let k=Math.max(0, idx-win); k<Math.min(lastData.length, idx+win+1); k++){
+    const v = Math.abs(lastData[k]);
+    if(v > bestVal){ bestVal = v; best = k; }
+  }
+  if(pickMode==='t1') marks.t1 = best;
+  if(pickMode==='t2') marks.t2 = best;
+  pickMode = null;
+  redrawAll();
+  setStatus("手動指定を適用しました");
+});
+
+async function pulseTest(){
+  try{
+    await initAudio(); await audioCtx.resume();
+    const type = pulseTypeEl.value;
+    const dur = Math.max(2, parseInt(pulseMsEl.value||"80",10))/1000;
+    const vol = Math.max(0, Math.min(1, parseFloat(pulseVolEl.value||"1.0")));
+    const t = audioCtx.currentTime + 0.10;
+    playPulseAt(t, dur, vol, type);
+    setStatus("パルスを再生しました（録音なし）");
+  }catch(err){
+    console.error(err);
+    setStatus("パルステスト失敗: " + err.message);
+  }
+}
+
+measureBtn.addEventListener("click", measureWithPulse);
+startBtn.addEventListener("click", startRecOnly);
+stopBtn.addEventListener("click", stopRec);
+pulseTestBtn.addEventListener("click", ()=>{ pulseTest(); });
+demoSignalBtn.addEventListener("click", ()=>{ useDemo(); });
+</script>
 </body>
 </html>
