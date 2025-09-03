@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EchoScope — 反射測定（最小構成）</title>
+  <title>EchoScope — 反射測定 v1.2（閾値ガイド付き）</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）</h1>
-    <p>短いホワイトノイズのパルスを<b>発音</b>して録音。波形上をクリックして <b>t₁（直音ピーク）</b> と <b>t₂（反射ピーク）</b> を<b>手動で記録</b>します。</p>
+    <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）v1.2</h1>
+    <p><b>手動指定はそのまま</b>、補助として<b>包絡＋相対閾値</b>と<b>候補ピーク</b>のガイドを追加。</p>
   </header>
 
   <section class="panel">
@@ -17,15 +17,35 @@
       <label>録音時間 (ms)
         <input id="recMs" type="number" min="200" step="50" value="1200">
       </label>
-      <label>プレロール (ms) <span class="hint">発音の何ms前から録音するか</span>
+      <label>プレロール (ms)
         <input id="preMs" type="number" min="50" step="10" value="150">
       </label>
+      <label>パルス種別
+        <select id="pulseType">
+          <option value="noise">ノイズ</option>
+          <option value="sine" selected>サイン(1.5kHz)</option>
+        </select>
+      </label>
       <label>パルス長 (ms)
-        <input id="pulseMs" type="number" min="2" step="1" value="15">
+        <input id="pulseMs" type="number" min="2" step="1" value="60">
       </label>
       <label>パルス音量 (0〜1)
         <input id="pulseVol" type="number" min="0" max="1" step="0.05" value="0.8">
       </label>
+    </div>
+
+    <div class="row">
+      <label>包絡窓 (ms)
+        <input id="envMs" type="number" min="0.3" step="0.1" value="1.2">
+      </label>
+      <label>相対閾値 (0〜1)
+        <input id="thresh" type="number" min="0.02" max="1" step="0.01" value="0.06">
+      </label>
+      <label>最小ピーク間隔 (ms)
+        <input id="minSep" type="number" min="0.5" step="0.1" value="2.5">
+      </label>
+      <label class="inline"><input id="showCands" type="checkbox" checked> 候補表示</label>
+      <button id="applyTop2">候補→t₁/t₂</button>
     </div>
 
     <div class="row">
@@ -39,7 +59,7 @@
   </section>
 
   <section class="canvas-wrap">
-    <canvas id="wave" width="1200" height="280" title="t₁/t₂ボタンを押してから、波形をクリックしてピーク位置を決めます"></canvas>
+    <canvas id="wave" width="1200" height="300" title="t₁/t₂ボタンを押してから、波形をクリックしてピーク位置を決めます"></canvas>
   </section>
 
   <section class="row">
@@ -56,7 +76,7 @@
   </section>
 
   <footer>
-    <small>iPhoneでは録音中の再生音が小さく聞こえることがあります（無音ではありません）。聞こえにくい場合は「録音のみ」で手拍子等のパルスを使ってください。</small>
+    <small>ガイドは表示のみで、<b>測定値は常に手動で決定</b>できます。iPhoneでは録音中の再生音が小さく聞こえる場合があります。</small>
   </footer>
 
   <script src="script.js"></script>
