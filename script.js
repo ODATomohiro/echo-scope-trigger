@@ -1,9 +1,11 @@
-// EchoScope — Peak Picker
+// EchoScope — Reflection Minimal
 let audioCtx;
 let workletNode;
 let stream;
 let buffer = [];
 let sampleRate = 48000;
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 const $ = (s)=>document.querySelector(s);
 const wave = $("#wave");
@@ -14,22 +16,14 @@ const preMsEl = $("#preMs");
 const pulseMsEl = $("#pulseMs");
 const pulseVolEl = $("#pulseVol");
 
-const envMsEl = $("#envMs");
-const threshEl = $("#thresh");
-const minSepEl = $("#minSep");
-
-const tubeLEl = $("#tubeL");
-const geomEl = $("#geom");
-const extraPathWrap = $("#customPathWrap");
-const extraPathEl = $("#extraPath");
-
 const measureBtn = $("#measureBtn");
 const startBtn = $("#startBtn");
 const stopBtn = $("#stopBtn");
+const pulseTestBtn = $("#pulseTest");
 const exportBtn = $("#exportBtn");
 const setT1Btn = $("#setT1");
 const setT2Btn = $("#setT2");
-const recalcBtn = $("#recalc");
+const clearMarksBtn = $("#clearMarks");
 const statusEl = $("#status");
 
 const srEl = $("#sr");
@@ -38,24 +32,19 @@ const a1El = $("#a1");
 const t2El = $("#t2");
 const a2El = $("#a2");
 const dtEl = $("#dt");
-const vEl  = $("#v");
 
-let pickMode = null; // 't1' or 't2' or null
 let lastData = null;
-let lastPeaks = null;
+let marks = {t1:null, t2:null};
 
 function setStatus(s){ statusEl.textContent = s; }
 
 function resetUI(){
-  [t1El,a1El,t2El,a2El,dtEl,vEl].forEach(el=>el.textContent="—");
+  [t1El,a1El,t2El,a2El,dtEl].forEach(el=>el.textContent="—");
   exportBtn.disabled = true;
   draw([], []);
-  lastData = null; lastPeaks = null;
+  lastData = null; marks = {t1:null, t2:null};
+  if(isIOS){ pulseMsEl.value = "20"; }
 }
-
-geomEl.addEventListener("change", ()=>{
-  extraPathWrap.style.display = (geomEl.value === "custom") ? "" : "none";
-});
 
 async function initAudio(){
   if(audioCtx) return;
@@ -97,9 +86,10 @@ function stopRec(){
   buffer.forEach(a=>{ data.set(a, o); o+=a.length; });
 
   lastData = data;
-  const peaks = autoDetectPeaks(data);
-  lastPeaks = peaks;
-  renderPeaks(peaks);
+  draw(data, []);
+  exportBtn.disabled = false;
+  exportBtn.onclick = () => exportCSV();
+  setStatus("完了：波形から t₁/t₂ をクリックで指定してください");
   startBtn.disabled = false;
   measureBtn.disabled = false;
 }
@@ -111,7 +101,7 @@ async function startRecOnly(){
     await initAudio();
     await attachMic();
     setStatus("録音中...");
-    const ms = Math.max(100, parseInt(recMsEl.value||"1200",10));
+    const ms = Math.max(200, parseInt(recMsEl.value||"1200",10));
     setTimeout(stopRec, ms);
   }catch(err){
     console.error(err);
@@ -126,16 +116,17 @@ async function measureWithPulse(){
     measureBtn.disabled = true; stopBtn.disabled = false;
     setStatus("初期化...");
     await initAudio();
+    await audioCtx.resume();
     await attachMic();
-    const recMs = Math.max(100, parseInt(recMsEl.value||"1200",10));
+    const recMs = Math.max(200, parseInt(recMsEl.value||"1200",10));
     const preMs = Math.max(50, parseInt(preMsEl.value||"150",10));
-    const pulseMs = Math.max(1, parseInt(pulseMsEl.value||"8",10));
+    const pulseMs = Math.max(2, parseInt(pulseMsEl.value||"15",10));
     const vol = Math.max(0, Math.min(1, parseFloat(pulseVolEl.value||"0.8")));
 
     const startTime = audioCtx.currentTime + preMs/1000;
-    playPulseAt(startTime, pulseMs/1000, vol);
+    playNoisePulseAt(startTime, pulseMs/1000, vol);
 
-    setStatus("録音中...（パルス発音→自動ピーク検出）");
+    setStatus("録音中...（パルス→手動ピーク）");
     setTimeout(stopRec, recMs);
   }catch(err){
     console.error(err);
@@ -144,7 +135,7 @@ async function measureWithPulse(){
   }
 }
 
-function playPulseAt(startTime, durSec, vol){
+function playNoisePulseAt(startTime, durSec, vol){
   const len = Math.max(1, Math.floor(sampleRate * durSec));
   const noise = audioCtx.createBuffer(1, len, sampleRate);
   const ch = noise.getChannelData(0);
@@ -168,101 +159,7 @@ function playPulseAt(startTime, durSec, vol){
   src.stop(startTime + durSec + 0.02);
 }
 
-function movingAverageAbs(data, win){
-  const out = new Float32Array(data.length);
-  let sum = 0;
-  for(let i=0;i<data.length;i++){
-    const v = Math.abs(data[i]);
-    sum += v;
-    if(i>=win) sum -= Math.abs(data[i-win]);
-    out[i] = sum / Math.min(i+1, win);
-  }
-  return out;
-}
-
-function autoDetectPeaks(data){
-  const sr = sampleRate;
-  const envWin = Math.max(1, Math.floor(sr * (parseFloat(envMsEl.value||"1.5")/1000)));
-  const env = movingAverageAbs(data, envWin);
-
-  // relative threshold
-  let maxv = 0; for(let i=0;i<env.length;i++) if(env[i]>maxv) maxv=env[i];
-  const T = (maxv>0) ? (parseFloat(threshEl.value||"0.08") * maxv) : parseFloat(threshEl.value||"0.08");
-
-  const minSep = Math.max(1, Math.floor(sr * (parseFloat(minSepEl.value||"40")/1000)));
-  const candidates = [];
-  let i = 1;
-  while(i < env.length-1){
-    if(env[i] >= T && env[i] >= env[i-1] && env[i] >= env[i+1]){
-      // local max
-      candidates.push(i);
-      i += minSep; // enforce separation
-    }else{
-      i++;
-    }
-  }
-
-  // take first two peaks
-  const peaks = candidates.slice(0,2);
-  // refine on raw |data| around each peak (±1 ms)
-  const ref = [];
-  const refineWin = Math.max(1, Math.floor(sr * 0.001));
-  for(const p of peaks){
-    let bestIdx = p, bestVal = 0;
-    const s = Math.max(0, p - refineWin), e = Math.min(data.length, p + refineWin + 1);
-    for(let k=s;k<e;k++){
-      const v = Math.abs(data[k]);
-      if(v > bestVal){ bestVal = v; bestIdx = k; }
-    }
-    ref.push(bestIdx);
-  }
-  return ref;
-}
-
-function renderPeaks(peaks){
-  const data = lastData;
-  const sr = sampleRate;
-  if(!data) return;
-  draw(data, peaks.map((idx, n)=>({index: idx, color: n===0?"#1f77b4":"#d62728"})));
-
-  let t1=NaN,a1=NaN,t2=NaN,a2=NaN;
-  if(peaks[0] != null){
-    t1 = peaks[0]/sr; a1 = Math.abs(data[peaks[0]]);
-  }
-  if(peaks[1] != null){
-    t2 = peaks[1]/sr; a2 = Math.abs(data[peaks[1]]);
-  }
-  t1El.textContent = isFinite(t1)?t1.toFixed(6):"—";
-  a1El.textContent = isFinite(a1)?a1.toFixed(4):"—";
-  t2El.textContent = isFinite(t2)?t2.toFixed(6):"—";
-  a2El.textContent = isFinite(a2)?a2.toFixed(4):"—";
-
-  const dt = (isFinite(t1)&&isFinite(t2)) ? (t2-t1) : NaN;
-  dtEl.textContent = isFinite(dt)?dt.toFixed(6):"—";
-
-  exportBtn.disabled = false;
-  exportBtn.onclick = () => exportCSV({t1,a1,t2,a2,dt,sr});
-  recalcSpeed(dt);
-}
-
-function recalcSpeed(dtOverride){
-  const dt = (typeof dtOverride === "number" && isFinite(dtOverride)) ? dtOverride :
-             (isFinite(parseFloat(dtEl.textContent)) ? parseFloat(dtEl.textContent) : NaN);
-  if(!isFinite(dt) || dt<=0){ vEl.textContent="—"; return; }
-  let v;
-  if(geomEl.value === "round"){
-    const L = Math.max(0, parseFloat(tubeLEl.value||"0"));
-    v = (2 * L) / dt;
-  }else{
-    const dL = Math.max(0, parseFloat(extraPathEl.value||"0"));
-    v = dL / dt;
-  }
-  vEl.textContent = isFinite(v) ? v.toFixed(3) : "—";
-}
-
-recalcBtn.addEventListener("click", ()=> recalcSpeed());
-
-function draw(data, marks=[]){
+function draw(data, marksList=[]){
   const W = wave.width, H = wave.height;
   const ctx = g;
   ctx.clearRect(0,0,W,H);
@@ -288,66 +185,93 @@ function draw(data, marks=[]){
   }
   ctx.stroke();
 
-  marks.forEach(m => {
-    const x = Math.floor((m.index / data.length) * W);
+  marksList.forEach(m => {
+    const x = Math.floor((m.index / lastData.length) * W);
     ctx.fillStyle = m.color || "#d24";
     ctx.fillRect(x, 0, 2, H);
   });
 }
 
-// Manual pick: click canvas with t₁手動 / t₂手動ボタン
+function refineToLocalPeak(idx){
+  if(!lastData) return idx;
+  const sr = sampleRate;
+  const win = Math.max(1, Math.floor(sr*0.001)); // ±1ms
+  let best = idx, bestVal = 0;
+  for(let k=Math.max(0, idx-win); k<Math.min(lastData.length, idx+win+1); k++){
+    const v = Math.abs(lastData[k]);
+    if(v > bestVal){ bestVal = v; best = k; }
+  }
+  return best;
+}
+
+let pickMode = null;
 setT1Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t1'?null:'t1'); setStatus(pickMode==='t1'?'t₁をクリックで指定':''); });
 setT2Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t2'?null:'t2'); setStatus(pickMode==='t2'?'t₂をクリックで指定':''); });
+clearMarksBtn.addEventListener("click", ()=>{
+  marks = {t1:null, t2:null};
+  updateReadout();
+});
+
 wave.addEventListener("click", (ev)=>{
   if(!pickMode || !lastData) return;
   const rect = wave.getBoundingClientRect();
   const x = ev.clientX - rect.left;
   const W = wave.width;
   const idx = Math.round((x / W) * lastData.length);
-  // refine to nearest local |data| max ±1ms
-  const sr = sampleRate;
-  const win = Math.max(1, Math.floor(sr*0.001));
-  let best = idx, bestVal = 0;
-  for(let k=Math.max(0,idx-win); k<Math.min(lastData.length,idx+win+1); k++){
-    const v = Math.abs(lastData[k]);
-    if(v > bestVal){ bestVal = v; best = k; }
-  }
-  if(!lastPeaks) lastPeaks = [];
-  if(pickMode==='t1') lastPeaks[0] = best;
-  if(pickMode==='t2') lastPeaks[1] = best;
-  renderPeaks(lastPeaks);
+  const refined = refineToLocalPeak(idx);
+  if(pickMode==='t1') marks.t1 = refined;
+  if(pickMode==='t2') marks.t2 = refined;
   pickMode = null;
+  updateReadout();
   setStatus("手動指定を適用しました");
 });
 
-function exportCSV({t1,a1,t2,a2,dt,sr}){
-  const L = parseFloat(tubeLEl.value||"");
-  const mode = geomEl.value;
-  const dL = (mode==='round') ? (2*L) : parseFloat(extraPathEl.value||"");
-  const v = (isFinite(dt) && dt>0) ? (dL/dt) : NaN;
-  const header = ["sample_rate_Hz","t1_s","A1","t2_s","A2","delta_t_s","mode","L_m","extra_path_m","speed_mps"];
+function updateReadout(){
+  draw(lastData, [
+    ...(marks.t1!=null?[{index:marks.t1,color:"#1f77b4"}]:[]),
+    ...(marks.t2!=null?[{index:marks.t2,color:"#d62728"}]:[])
+  ]);
+  const sr = sampleRate;
+  let t1=NaN,a1=NaN,t2=NaN,a2=NaN,dt=NaN;
+  if(marks.t1!=null){ t1 = marks.t1/sr; a1 = Math.abs(lastData[marks.t1]); }
+  if(marks.t2!=null){ t2 = marks.t2/sr; a2 = Math.abs(lastData[marks.t2]); }
+  if(isFinite(t1) && isFinite(t2)) dt = t2 - t1;
+
+  t1El.textContent = isFinite(t1)?t1.toFixed(6):"—";
+  a1El.textContent = isFinite(a1)?a1.toFixed(4):"—";
+  t2El.textContent = isFinite(t2)?t2.toFixed(6):"—";
+  a2El.textContent = isFinite(a2)?a2.toFixed(4):"—";
+  dtEl.textContent = isFinite(dt)?dt.toFixed(6):"—";
+}
+
+function exportCSV(){
+  const sr = sampleRate;
+  let t1="",a1="",t2="",a2="",dt="";
+  if(marks.t1!=null){ t1 = (marks.t1/sr).toFixed(6); a1 = Math.abs(lastData[marks.t1]).toFixed(6); }
+  if(marks.t2!=null){ t2 = (marks.t2/sr).toFixed(6); a2 = Math.abs(lastData[marks.t2]).toFixed(6); }
+  if(marks.t1!=null && marks.t2!=null){ dt = ((marks.t2-marks.t1)/sr).toFixed(6); }
+  const header = ["sample_rate_Hz","t1_s","A1","t2_s","A2","delta_t_s"];
   let csv = header.join(",") + "\\n";
-  csv += [sr, 
-          isFinite(t1)?t1.toFixed(6):"", 
-          isFinite(a1)?a1.toFixed(6):"", 
-          isFinite(t2)?t2.toFixed(6):"", 
-          isFinite(a2)?a2.toFixed(6):"", 
-          isFinite(dt)?dt.toFixed(6):"", 
-          mode, 
-          (mode==='round')?L.toFixed(6):"", 
-          (mode==='custom')?dL.toFixed(6):"", 
-          isFinite(v)?v.toFixed(6):""].join(",") + "\\n";
+  csv += [sr, t1, a1, t2, a2, dt].join(",") + "\\n";
   const blob = new Blob([csv], {type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "peak_picker_result.csv";
+  a.download = "reflection_min_result.csv";
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+async function pulseTest(){
+  await initAudio();
+  await audioCtx.resume();
+  const t = audioCtx.currentTime + 0.05;
+  playNoisePulseAt(t, Math.max(2, parseInt(pulseMsEl.value||"15",10))/1000, parseFloat(pulseVolEl.value||"0.8"));
+  setStatus("パルスを再生しました（録音なし）");
 }
 
 measureBtn.addEventListener("click", measureWithPulse);
 startBtn.addEventListener("click", startRecOnly);
 stopBtn.addEventListener("click", stopRec);
-recalcBtn.addEventListener("click", ()=>recalcSpeed());
+pulseTestBtn.addEventListener("click", ()=>{ pulseTest(); });
 
 resetUI();
