@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EchoScope — 反応時刻モード（音速測定用）</title>
+  <title>EchoScope — ピーク検出（直音/反射）</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>EchoScope — 反応時刻モード</h1>
-    <p>マイクが<b>最初に反応した時刻</b>（しきい値超え）を求めます。パルス発音のタイミングを基準に <b>Δt</b> を表示。</p>
+    <h1>EchoScope — ピーク検出（直音と反射）</h1>
+    <p>短いパルスを出して録音し、<b>直音</b>と<b>反射音</b>の<b>ピーク時刻とピーク値</b>を読み取ります。既知の管長 L から音速を推定。</p>
   </header>
 
   <section class="panel">
@@ -17,18 +17,9 @@
       <label>録音時間 (ms)
         <input id="recMs" type="number" min="100" step="50" value="1200">
       </label>
-      <label>プレロール (ms) <span class="hint">発音の何ms前から録音するか</span>
-        <input id="preMs" type="number" min="0" step="10" value="150">
+      <label>プレロール (ms)
+        <input id="preMs" type="number" min="50" step="10" value="150">
       </label>
-      <label>しきい値（0〜1）
-        <input id="thresh" type="number" min="0.01" max="1" step="0.01" value="0.08">
-      </label>
-      <label>平滑窓 (ms)
-        <input id="envMs" type="number" min="0.5" step="0.5" value="1.5">
-      </label>
-    </div>
-
-    <div class="row">
       <label>パルス長 (ms)
         <input id="pulseMs" type="number" min="1" step="1" value="8">
       </label>
@@ -38,46 +29,58 @@
     </div>
 
     <div class="row">
-      <button id="measureBtn">発音して測定（反応時刻）</button>
-      <button id="pulseBtn">パルス再生（テスト）</button>
-      <button id="startBtn">録音のみで測定</button>
+      <label>包絡窓 (ms)
+        <input id="envMs" type="number" min="0.5" step="0.5" value="1.5">
+      </label>
+      <label>検出しきい値 (0〜1, 相対)
+        <input id="thresh" type="number" min="0.01" max="1" step="0.01" value="0.08">
+      </label>
+      <label>最小ピーク間隔 (ms)
+        <input id="minSep" type="number" min="5" step="1" value="40">
+      </label>
+    </div>
+
+    <div class="row">
+      <label>管長 L (m)
+        <input id="tubeL" type="number" step="0.001" value="0.400">
+      </label>
+      <label>幾何
+        <select id="geom">
+          <option value="round">往復（Δt = 2L / v）</option>
+          <option value="custom">カスタム（Δt = Δℓ / v）</option>
+        </select>
+      </label>
+      <label id="customPathWrap" style="display:none">追加経路Δℓ (m)
+        <input id="extraPath" type="number" step="0.001" value="0.800">
+      </label>
+      <button id="recalc">音速を計算</button>
+    </div>
+
+    <div class="row">
+      <button id="measureBtn">発音して測定（ピーク）</button>
+      <button id="startBtn">録音のみ</button>
       <button id="stopBtn" disabled>停止</button>
       <button id="exportBtn" disabled>CSV書き出し</button>
+      <button id="setT1">t₁手動</button>
+      <button id="setT2">t₂手動</button>
       <span id="status">準備OK</span>
     </div>
   </section>
 
   <section class="canvas-wrap">
-    <canvas id="wave" width="1200" height="260"></canvas>
+    <canvas id="wave" width="1200" height="260" title="クリックで手動ピーク指定（t₁/t₂ボタン有効時）"></canvas>
   </section>
 
   <section class="results">
     <div>サンプルレート: <span id="sr">—</span> Hz</div>
-    <div>発音時刻 t_emit（録音基準）: <span id="tEmit">—</span> s</div>
-    <div>マイク反応 t_mic（最初のピーク）: <span id="tMic">—</span> s</div>
-    <div>Δt = t_mic − t_emit: <span id="dt">—</span> s</div>
-
-    <details>
-      <summary>（任意）距離から音速を計算</summary>
-      <div class="row">
-        <label>距離 d (m)
-          <input id="dist" type="number" step="0.001" value="1.000">
-        </label>
-        <label>経路
-          <select id="pathMode">
-            <option value="one">片道（t = d / v）</option>
-            <option value="round">往復（t = 2d / v）</option>
-          </select>
-        </label>
-        <button id="calcVBtn">音速を求める</button>
-      </div>
-      <div>推定音速 v: <span id="v">—</span> m/s</div>
-    </details>
+    <div>t₁直音: <span id="t1">—</span> s ／ A₁: <span id="a1">—</span></div>
+    <div>t₂反射: <span id="t2">—</span> s ／ A₂: <span id="a2">—</span></div>
+    <div>Δt = <span id="dt">—</span> s ／ 推定音速 v: <span id="v">—</span> m/s</div>
   </section>
 
   <footer>
-    <small>注：Δtはブラウザのスケジューリング誤差を極小化するため、<b>プレロール</b>値を用いて t_emit を決めています（t_emit ≈ preMs）。
-    スピーカー直近の直音を拾う配置にすると精度が安定します。</small>
+    <small>想定：スピーカーとマイクは筒の開口近傍に配置 → 反射はおおよそ <i>2L</i> 長い経路を通る。<br>
+    その場合 <b>v ≈ 2L / Δt</b> 。配置が異なる場合は「カスタム」で追加経路長 Δℓ を使って <b>v ≈ Δℓ / Δt</b> を選択。</small>
   </footer>
 
   <script src="script.js"></script>
