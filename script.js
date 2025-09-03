@@ -251,8 +251,8 @@ function exportCSV(){
   if(marks.t2!=null){ t2 = (marks.t2/sr).toFixed(6); a2 = Math.abs(lastData[marks.t2]).toFixed(6); }
   if(marks.t1!=null && marks.t2!=null){ dt = ((marks.t2-marks.t1)/sr).toFixed(6); }
   const header = ["sample_rate_Hz","t1_s","A1","t2_s","A2","delta_t_s"];
-  let csv = header.join(",") + "\\n";
-  csv += [sr, t1, a1, t2, a2, dt].join(",") + "\\n";
+  let csv = header.join(",") + "¥¥n";
+  csv += [sr, t1, a1, t2, a2, dt].join(",") + "¥¥n";
   const blob = new Blob([csv], {type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
