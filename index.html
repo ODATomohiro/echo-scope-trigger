@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EchoScope — 反射測定（単一HTML版 v1.5S / Mac対応強化）</title>
+<title>EchoScope — 反射測定（単一HTML版 v1.6S / クリック強化）</title>
 <style>
 *{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;margin:0;color:#1b1f23;background:#f6f8fa}
 header{padding:16px 20px;background:#fff;border-bottom:1px solid #e5e7eb}
@@ -17,19 +17,18 @@ button{padding:8px 12px;border-radius:10px;border:1px solid #c7d0e0;background:#
 button:disabled{opacity:.5;cursor:not-allowed}
 #status{margin-left:8px;color:#555}
 .warn{background:#fff3cd;border:1px solid #ffe69c;color:#775f00;padding:8px 12px;border-radius:10px}
-.error{background:#fde2e1;border:1px solid #f5b5b0;color:#942a23;padding:8px 12px;border-radius:10px}
 .canvas-wrap{padding:12px 16px}
-#wave{width:100%;height:300px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+#wave{width:100%;height:300px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,.04);cursor:crosshair;touch-action:none}
 .results{background:#fff;border-top:1px solid #e5e7eb;padding:12px 16px;display:grid;gap:6px}
 .small{font-size:12px;color:#6b7280}
 .kv{display:grid;grid-template-columns:140px 1fr;gap:6px 10px}
-kbd{padding:2px 6px;border:1px solid #c7d0e0;border-radius:6px;background:#f7faff}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111827;color:#fff;padding:8px 12px;border-radius:8px;opacity:.96;z-index:9999;font-size:13px}
 </style>
 </head>
 <body>
 <header>
-  <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）単一HTML v1.5S</h1>
-  <div id="originWarn" class="warn" style="display:none">このページは <b>安全なオリジン(HTTPS)</b> で開かれていません。Chrome/Safariともに <b>file://</b> では<b>マイクが使えません</b>。<br>対策：<b>GitHub Pages 等のHTTPS</b>、または <b>http://localhost</b> で開いてください。</div>
+  <h1>EchoScope — 反射測定（ホワイトノイズ短パルス + 手動 t₁/t₂）単一HTML v1.6S</h1>
+  <div id="originWarn" class="warn" style="display:none">このページは <b>安全なオリジン(HTTPS)</b> で開かれていません。Chrome/Safariともに <b>file://</b> では<b>マイク不可</b>。<br>対策：<b>GitHub Pages 等のHTTPS</b>、または <b>http://localhost</b> で開いてください。</div>
 </header>
 
 <section class="panel">
@@ -69,21 +68,13 @@ kbd{padding:2px 6px;border:1px solid #c7d0e0;border-radius:6px;background:#f7faf
   </div>
 
   <div class="row">
-    <label style="min-width:220px">マイク（入力デバイス）
-      <select id="micSelect"><option value="default">（既定）</option></select>
-    </label>
-    <button id="refreshMics">↻ デバイス更新</button>
-    <button id="diagBtn">診断</button>
-    <span id="status">準備OK</span>
-  </div>
-
-  <div class="row">
     <button id="measureBtn">発音して測定</button>
     <button id="startBtn">録音のみ</button>
     <button id="stopBtn" disabled>停止</button>
     <button id="pulseTest">パルス再生テスト</button>
     <button id="demoSignal">デモ信号生成</button>
     <button id="exportBtn" disabled>CSV書き出し</button>
+    <span id="status">準備OK（まずは「デモ信号生成」でクリック確認が確実）</span>
   </div>
 </section>
 
@@ -104,17 +95,10 @@ kbd{padding:2px 6px;border:1px solid #c7d0e0;border-radius:6px;background:#f7faf
   <div>Δt = <span id="dt">—</span> s</div>
 </section>
 
-<section class="panel" id="diagPanel" style="display:none">
-  <h3>診断情報</h3>
-  <div class="kv small" id="diagKV"></div>
-</section>
+<div id="toast" class="toast" style="display:none"></div>
 
 <footer style="padding:12px 16px">
-  <div class="small">macOS でマイクが出ない時は：<br>
-  1) <b>システム設定 → プライバシーとセキュリティ → マイク</b>でブラウザ（Chrome/Safari）を<b>オン</b><br>
-  2) Chrome: アドレスバー左の <kbd>🔒</kbd> → マイクを<b>許可</b> ／ Safari: <b>設定 → Webサイト → マイク</b> で該当サイトを<b>許可</b><br>
-  3) 既にマイクを使っているアプリ（Zoom/Meet等）を終了<br>
-  4) それでも不可なら、アクティビティモニタで <b>coreaudiod</b> を終了（自動再起動）</div>
+  <div class="small">動かない時は：1) まず<b>デモ信号生成</b>→波形が出るか 2) 次に<b>t₁手動</b>→キャンバスをタップ/クリック 3) それでもダメなら<b>HTTPS/localhost</b>で開いてブラウザの<b>マイク許可</b>を確認</div>
 </footer>
 
 <script>
@@ -148,6 +132,7 @@ const isSecure = location.protocol === 'https:' || location.hostname === 'localh
 const $ = (s)=>document.querySelector(s);
 const wave = $("#wave");
 const g = wave.getContext("2d");
+const toast = $("#toast");
 
 const recMsEl = $("#recMs");
 const preMsEl = $("#preMs");
@@ -160,10 +145,6 @@ const threshEl = $("#thresh");
 const minSepEl = $("#minSep");
 const showCandsEl = $("#showCands");
 const applyTop2Btn = $("#applyTop2");
-
-const micSelect = $("#micSelect");
-const refreshMicsBtn = $("#refreshMics");
-const diagBtn = $("#diagBtn");
 
 const measureBtn = $("#measureBtn");
 const startBtn = $("#startBtn");
@@ -184,9 +165,6 @@ const t2El = $("#t2");
 const a2El = $("#a2");
 const dtEl = $("#dt");
 
-const diagPanel = $("#diagPanel");
-const diagKV = $("#diagKV");
-
 let lastData = null;
 let marks = {t1:null, t2:null};
 let candidates = [];
@@ -197,14 +175,15 @@ if(!isSecure){
 }
 
 function setStatus(s){ statusEl.textContent = s; }
+function showToast(msg, ms=1500){ toast.textContent = msg; toast.style.display='block'; setTimeout(()=>toast.style.display='none', ms); }
 
-// --- Canvas responsive ---
+// --- Canvas responsive (CSS幅と内部ピクセル幅を一致) ---
 function syncCanvasSize(){
   const rect = wave.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   wave.width = Math.max(1, Math.round(rect.width * dpr));
   wave.height = Math.max(1, Math.round(300 * dpr));
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); // 以後はCSS座標で描画
 }
 new ResizeObserver(syncCanvasSize).observe(wave);
 syncCanvasSize();
@@ -212,7 +191,7 @@ syncCanvasSize();
 function resetUI(){
   [t1El,a1El,t2El,a2El,dtEl].forEach(el=>el.textContent="—");
   exportBtn.disabled = true;
-  draw([], []);
+  draw(null, []);
   lastData = null; marks = {t1:null, t2:null}; candidates = [];
 }
 resetUI();
@@ -238,47 +217,17 @@ async function initAudio(){
   srEl.textContent = sampleRate.toFixed(0);
 }
 
-async function listMics(){
-  try{
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices.filter(d=>d.kind === 'audioinput');
-    micSelect.innerHTML = '<option value="default">（既定）</option>';
-    inputs.forEach(d=>{
-      const opt = document.createElement('option');
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `マイク (${d.deviceId.slice(0,6)}…)`;
-      micSelect.appendChild(opt);
-    });
-    if(inputs.length===0){
-      setStatus("マイクが列挙できません（許可待ち/デバイスなし）。録音ボタンを押して許可ダイアログを出してください。");
-    }
-  }catch(e){
-    setStatus("デバイス列挙に失敗: " + e.message);
-  }
-}
-refreshMicsBtn.addEventListener('click', listMics);
-listMics();
-
 async function attachMic(){
   if(!isSecure){
     throw new Error("不正なオリジン（HTTPSまたはlocalhostのみでマイク可）");
   }
-  const selected = micSelect.value;
-  const base = { echoCancellation:false, noiseSuppression:false, autoGainControl:false };
-  const c1 = { audio: { ...base, deviceId: selected==='default'? undefined : { exact: selected } } };
-  const c2 = { audio: { deviceId: selected==='default'? undefined : { exact: selected } } };
-  const c3 = { audio: true };
-  let lastErr;
-  for(const c of [c1, c2, c3]){
-    try{
-      stream = await navigator.mediaDevices.getUserMedia(c);
-      break;
-    }catch(e){
-      lastErr = e;
-      stream = null;
-    }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+  }catch(e){
+    throw new Error("マイク許可が得られませんでした: " + (e && e.message || e));
   }
-  if(!stream) throw new Error("getUserMedia 取得失敗: " + (lastErr && (lastErr.name + " " + lastErr.message)));
   const src = audioCtx.createMediaStreamSource(stream);
 
   // Try worklet first, then fallback to ScriptProcessor
@@ -330,7 +279,7 @@ function stopRec(){
   redrawAll();
   exportBtn.disabled = false;
   exportBtn.onclick = () => exportCSV();
-  setStatus("完了：波形から t₁/t₂ をクリックで指定してください（候補は参考表示）");
+  setStatus("完了：波形から t₁/t₂ をクリック（1回目=t₁, 2回目=t₂）");
   startBtn.disabled = false;
   measureBtn.disabled = false;
 }
@@ -423,11 +372,11 @@ function movingAverageAbs(data, win){
   return out;
 }
 
-function findCandidates(data){
-  if(!data || data.length===0) return [];
+function findCandidates(dataArr){
+  if(!dataArr || dataArr.length===0) return [];
   const sr = sampleRate;
   const envWin = Math.max(1, Math.floor(sr * (parseFloat(envMsEl.value||"1.2")/1000)));
-  const env = movingAverageAbs(data, envWin);
+  const env = movingAverageAbs(dataArr, envWin);
   let maxv = 0; for(let i=0;i<env.length;i++) if(env[i]>maxv) maxv=env[i];
   const Trel = Math.max(0.0, Math.min(1.0, parseFloat(threshEl.value||"0.06")));
   const T = (maxv>0) ? (Trel * maxv) : Trel;
@@ -448,9 +397,9 @@ function findCandidates(data){
   const refineWin = Math.max(1, Math.floor(sr * 0.001));
   for(const p of cands){
     let bestIdx = p, bestVal = 0;
-    const s = Math.max(0, p - refineWin), e = Math.min(data.length, p + refineWin + 1);
+    const s = Math.max(0, p - refineWin), e = Math.min(dataArr.length, p + refineWin + 1);
     for(let k=s;k<e;k++){
-      const v = Math.abs(data[k]);
+      const v = Math.abs(dataArr[k]);
       if(v > bestVal){ bestVal = v; bestIdx = k; }
     }
     ref.push(bestIdx);
@@ -460,6 +409,15 @@ function findCandidates(data){
 
 function updateCandidates(){ candidates = findCandidates(lastData); }
 function redrawAll(){
+  draw(lastData, [
+    ...(marks.t1!=null?[{index:marks.t1,color:"#1f77b4"}]:[]),
+    ...(marks.t2!=null?[{index:marks.t2,color:"#d62728"}]:[]),
+    ...(showCandsEl.checked ? candidates.map(i=>({index:i,color:"#888"})) : [])
+  ]);
+  updateReadoutNumbers();
+}
+
+function draw(dataArr, marksList=[]){
   const rect = wave.getBoundingClientRect();
   const Wcss = rect.width, Hcss = rect.height;
   const ctx = g;
@@ -467,17 +425,16 @@ function redrawAll(){
   ctx.fillStyle = "#fff"; ctx.fillRect(0,0,Wcss,Hcss);
   ctx.strokeStyle = "#e5e7eb"; ctx.beginPath(); ctx.moveTo(0,Hcss/2); ctx.lineTo(Wcss,Hcss/2); ctx.stroke();
 
-  if(!data || data.length===0) { var data = lastData; } // ensure 'data' var
-  if(!data || data.length===0) return;
+  if(!dataArr || dataArr.length===0) return;
 
-  const step = Math.ceil(data.length / Math.max(1, Math.floor(Wcss)));
+  const step = Math.ceil(dataArr.length / Math.max(1, Math.floor(Wcss)));
   ctx.strokeStyle = "#4f6aa0"; ctx.beginPath();
   for(let x=0; x<Math.floor(Wcss); x++){
     const start = x*step;
-    const end = Math.min((x+1)*step, data.length);
+    const end = Math.min((x+1)*step, dataArr.length);
     let min = 1, max = -1;
     for(let i=start;i<end;i++){
-      const v = data[i];
+      const v = dataArr[i];
       if(v<min) min=v; if(v>max) max=v;
     }
     const y1 = Hcss/2 - min * (Hcss*0.45);
@@ -487,14 +444,8 @@ function redrawAll(){
   }
   ctx.stroke();
 
-  const marksList = [
-    ...(marks.t1!=null?[{index:marks.t1,color:"#1f77b4"}]:[]),
-    ...(marks.t2!=null?[{index:marks.t2,color:"#d62728"}]:[]),
-    ...(showCandsEl.checked ? candidates.map(i=>({index:i,color:"#888"})) : [])
-  ];
   marksList.forEach(m => {
-    if(!lastData) return;
-    const x = Math.floor((m.index / lastData.length) * Wcss);
+    const x = Math.floor((m.index / dataArr.length) * Wcss);
     ctx.fillStyle = m.color || "#d24";
     ctx.fillRect(x, 0, 2, Hcss);
   });
@@ -526,7 +477,7 @@ function exportCSV(){
   const blob = new Blob([csv], {type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "reflection_result_v15S.csv";
+  a.download = "reflection_result_v16S.csv";
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -555,82 +506,74 @@ function makeDemoSignal(){
 function useDemo(){
   lastData = makeDemoSignal();
   candidates = findCandidates(lastData);
-  marks = {t1:candidates[0]??null, t2:candidates[1]??null};
+  marks = {t1:null, t2:null};
   redrawAll();
-  updateReadoutNumbers();
-  setStatus("デモ信号を表示しました。t₁/t₂をクリックで調整できます。");
+  setStatus("デモ波形を表示：まず画面下の「t₁手動」を押してからキャンバスをクリック/タップ（1回目=t₁, 2回目=t₂）");
   exportBtn.disabled = false;
   exportBtn.onclick = () => exportCSV();
 }
 
-// Diagnostics
-function addKV(k,v){
-  const kdiv=document.createElement('div'); kdiv.textContent=k;
-  const vdiv=document.createElement('div'); vdiv.textContent=String(v);
-  diagKV.appendChild(kdiv); diagKV.appendChild(vdiv);
-}
-
-async function showDiag(){
-  diagKV.innerHTML = "";
-  addKV("Secure origin?", (location.protocol==='https:' || location.hostname==='localhost'));
-  addKV("UserAgent", navigator.userAgent);
-  try{
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const nIn = devices.filter(d=>d.kind==='audioinput').length;
-    const nOut = devices.filter(d=>d.kind==='audiooutput').length;
-    addKV("audioinput devices", nIn);
-    addKV("audiooutput devices", nOut);
-    const labels = devices.filter(d=>d.kind==='audioinput').map(d=>d.label||"(labelなし)");
-    addKV("input labels", labels.join(" | "));
-  }catch(e){
-    addKV("enumerateDevices error", e.message);
-  }
-  if(navigator.permissions && navigator.permissions.query){
-    try{
-      const st = await navigator.permissions.query({name:'microphone'});
-      addKV("permissions(microphone)", st.state);
-    }catch(e){
-      addKV("permissions API", "未対応/失敗");
-    }
-  }else{
-    addKV("permissions API", "未対応");
-  }
-  diagPanel.style.display = "block";
-}
-
-diagBtn.addEventListener('click', showDiag);
-
-// UI events
-setT1Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t1'?null:'t1'); setStatus(pickMode==='t1'?'t₁をクリックで指定':''); });
-setT2Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t2'?null:'t2'); setStatus(pickMode==='t2'?'t₂をクリックで指定':''); });
-clearMarksBtn.addEventListener("click", ()=>{ marks = {t1:null, t2:null}; redrawAll(); updateReadoutNumbers(); });
-[envMsEl, threshEl, minSepEl, showCandsEl].forEach(el=>{
-  el.addEventListener("input", ()=>{ updateCandidates(); redrawAll(); updateReadoutNumbers(); });
-});
-applyTop2Btn.addEventListener("click", ()=>{
-  if(candidates.length >= 2){ marks.t1 = candidates[0]; marks.t2 = candidates[1]; redrawAll(); updateReadoutNumbers(); }
-});
-
-wave.addEventListener("click", (ev)=>{
-  if(!pickMode || !lastData) return;
-  const rect = wave.getBoundingClientRect();
-  const x = ev.clientX - rect.left;
-  const Wcss = rect.width; // 表示幅で正規化（ズレ対策）
-  const idx = Math.round((x / Wcss) * lastData.length);
-  // refine to local |.| max ±1ms
+// ---- Pointer/touch handlers ----
+function refineToLocalPeak(idx){
   const sr = sampleRate;
   const win = Math.max(1, Math.floor(sr*0.001));
-  let best = idx, bestVal = 0;
+  let best = idx, bestVal = -1;
   for(let k=Math.max(0, idx-win); k<Math.min(lastData.length, idx+win+1); k++){
     const v = Math.abs(lastData[k]);
     if(v > bestVal){ bestVal = v; best = k; }
   }
-  if(pickMode==='t1') marks.t1 = best;
-  if(pickMode==='t2') marks.t2 = best;
-  pickMode = null;
+  return best;
+}
+
+function handlePoint(clientX){
+  if(!lastData){
+    setStatus("波形がありません。まず「デモ信号生成」か「録音」を実行してください。");
+    showToast("先にデモ信号生成 or 録音を実行");
+    return;
+  }
+  const rect = wave.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const Wcss = rect.width;
+  if(Wcss <= 0) return;
+  const idx = Math.max(0, Math.min(lastData.length-1, Math.round((x / Wcss) * lastData.length)));
+  const refined = refineToLocalPeak(idx);
+
+  // Auto-pick: pickMode優先。未設定なら t1→t2 の順に自動で入れる
+  if(pickMode === 't1' || (!pickMode && marks.t1==null)){
+    marks.t1 = refined; pickMode = null;
+    setStatus("t₁を設定"); showToast("t₁ を設定しました");
+  }else if(pickMode === 't2' || (!pickMode && marks.t1!=null && marks.t2==null)){
+    marks.t2 = refined; pickMode = null;
+    setStatus("t₂を設定"); showToast("t₂ を設定しました");
+  }else{
+    marks.t1 = refined; marks.t2 = null; pickMode = null;
+    setStatus("t₁を更新（t₂は未設定）"); showToast("t₁ を更新しました");
+  }
   redrawAll();
-  updateReadoutNumbers();
-  setStatus("手動指定を適用しました");
+}
+
+wave.addEventListener('pointerdown', (ev)=>{ handlePoint(ev.clientX); ev.preventDefault(); });
+wave.addEventListener('click', (ev)=>{ handlePoint(ev.clientX); ev.preventDefault(); });
+wave.addEventListener('touchstart', (ev)=>{
+  if(ev.touches && ev.touches.length>0){ handlePoint(ev.touches[0].clientX); }
+  ev.preventDefault();
+}, {passive:false});
+
+// UI events
+setT1Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t1'?null:'t1'); setStatus(pickMode==='t1'?'t₁をクリックで指定':''); });
+setT2Btn.addEventListener("click", ()=>{ pickMode = (pickMode==='t2'?null:'t2'); setStatus(pickMode==='t2'?'t₂をクリックで指定':''); });
+clearMarksBtn.addEventListener("click", ()=>{
+  marks = {t1:null, t2:null}; redrawAll(); updateReadoutNumbers(); setStatus("マークを消去しました");
+});
+[envMsEl, threshEl, minSepEl, showCandsEl].forEach(el=>{
+  el.addEventListener("input", ()=>{ updateCandidates(); redrawAll(); updateReadoutNumbers(); });
+});
+applyTop2Btn.addEventListener("click", ()=>{
+  if(!lastData){ showToast("先に録音 or デモ信号生成を実行"); return; }
+  candidates = findCandidates(lastData);
+  if(candidates.length >= 2){ marks.t1 = candidates[0]; marks.t2 = candidates[1]; redrawAll(); updateReadoutNumbers(); setStatus("候補を適用"); }
+  else if(candidates.length === 1){ marks.t1 = candidates[0]; marks.t2 = null; redrawAll(); updateReadoutNumbers(); setStatus("候補1件をt₁に適用"); }
+  else { setStatus("閾値が高すぎる可能性。相対閾値を下げて再試行"); showToast("候補が見つかりません：閾値を下げる"); }
 });
 
 async function pulseTest(){
@@ -653,16 +596,6 @@ startBtn.addEventListener("click", startRecOnly);
 stopBtn.addEventListener("click", stopRec);
 pulseTestBtn.addEventListener("click", ()=>{ pulseTest(); });
 demoSignalBtn.addEventListener("click", ()=>{ useDemo(); });
-
-// Try to prompt permission early to get device labels
-(async ()=>{
-  try{
-    if(isSecure){
-      await navigator.mediaDevices.getUserMedia({audio:true});
-    }
-  }catch(e){ /* ignore — user may allow later */ }
-  listMics();
-})();
 </script>
 </body>
 </html>
