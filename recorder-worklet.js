@@ -10,8 +10,7 @@ class RecorderProcessor extends AudioWorkletProcessor {
       this.port.postMessage({type:'samples', payload: copy}, [copy.buffer]);
     }
     if(out && out[0]){
-      // 無音モニタ（スピーカーへ返さない）
-      out[0].fill(0);
+      out[0].fill(0); // 無音モニタ
     }
     return true;
   }
